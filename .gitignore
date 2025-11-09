@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+
+# Bun artifacts
+bun.lockb
+*.bun-cache
+
+# Build output
+/dist
+/.vercel
+/.output
+
+# Logs & coverage
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+out.log
+err.log
+coverage/
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
