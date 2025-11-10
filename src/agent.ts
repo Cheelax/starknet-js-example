@@ -4,7 +4,12 @@ import {
   createAgentApp,
   createAxLLMClient,
 } from "@lucid-agents/agent-kit";
-import { fetchEthBalance } from "./starknet";
+import {
+  fetchAllTokenBalances,
+  fetchEthBalance,
+  TokenBalanceResult,
+  TokenBalanceFetchError,
+} from "./starknet";
 import { readStarknetConfig } from "./config";
 
 const axClient = createAxLLMClient({
@@ -93,5 +98,81 @@ addEntrypoint({
     };
   },
 });
+
+addEntrypoint({
+  key: "starknet-token-balances",
+  description:
+    "Read balances for the configured Starknet token list via starknet.js",
+  input: z.object({
+    address: starknetAddress.optional(),
+    include_zero_balances: z.boolean().optional(),
+  }),
+  handler: async ({ input }) => {
+    const config = readStarknetConfig();
+    const resolvedAddress = input.address?.trim() || config.accountAddress;
+
+    if (!resolvedAddress) {
+      throw new Error(
+        "Provide an address in the request or set STARKNET_ACCOUNT_ADDRESS"
+      );
+    }
+
+    const includeZero = input.include_zero_balances ?? true;
+    const { balances, errors } = await fetchAllTokenBalances(resolvedAddress, {
+      includeZero,
+    });
+
+    const formattedBalances = balances.map((balance) =>
+      serializeTokenBalance(balance)
+    );
+
+    const serializedErrors = errors.map((error) => serializeTokenError(error));
+
+    const nonZeroCount = balances.filter(
+      (balance) => balance.wei !== "0"
+    ).length;
+    const summary = includeZero
+      ? `Fetched ${balances.length} token balances for ${resolvedAddress} (zero balances included by default).`
+      : `Fetched ${nonZeroCount} non-zero token balances for ${resolvedAddress}.`;
+
+    return {
+      output: {
+        resolved_address: resolvedAddress,
+        address_source: input.address ? "input" : "env",
+        include_zero_balances: includeZero,
+        balances: formattedBalances,
+        errors: serializedErrors,
+        summary,
+      },
+    };
+  },
+});
+
+function serializeTokenBalance(balance: TokenBalanceResult) {
+  return {
+    token: {
+      name: balance.token.name,
+      symbol: balance.token.symbol,
+      address: balance.token.address,
+      decimals: balance.token.decimals,
+    },
+    wei: balance.wei,
+    formatted: balance.formatted,
+    decimals: balance.decimals,
+    contractAddress: balance.contractAddress,
+    walletAddress: balance.address,
+  };
+}
+
+function serializeTokenError(error: TokenBalanceFetchError) {
+  return {
+    token: {
+      name: error.token.name,
+      symbol: error.token.symbol,
+      address: error.token.address,
+    },
+    message: error.message,
+  };
+}
 
 export { app };
